@@ -1,11 +1,14 @@
 import re
-import ifc
 import sys
 import json
 import string
 import datetime
+import ifcopenshell
+
+try: from functools import reduce
+except: pass
+
 import rdf_extractor
-from functools import reduce
 
 class query:
     class instance_list:
@@ -38,10 +41,10 @@ class query:
             self.instance = instance
         def wrap_value(self, v, k):
             wrap = lambda e: query.instance("%s.%s"%(self.prefix,k), e)
-            if isinstance(v, ifc.entity_instance): return wrap(v)
+            if isinstance(v, ifcopenshell.entity_instance): return wrap(v)
             elif isinstance(v, (tuple, list)) and len(v):
                 classes = list(map(type, v))
-                if ifc.entity_instance in classes: 
+                if ifcopenshell.entity_instance in classes: 
                     return query.instance_list("%s.%s"%(self.prefix,k), list(map(wrap, v)))
             return v
         def __getattr__(self, k):
@@ -49,7 +52,16 @@ class query:
             
     class parameter_list:
         def __init__(self, li=None):
-            self.li = li or []
+            vector_names = ['int_vector', 'float_vector', 'double_vector', 'string_vector', 'material_vector']
+            vector_types = set(getattr(ifcopenshell.ifcopenshell_wrapper, nm) for nm in vector_names)
+            self.li = []
+            def walk():
+                for nm, val in (li or []):
+                    if type(val) in vector_types:
+                        for v in val:
+                            self.li.append((nm, v))
+                    else: self.li.append((nm, val))
+            walk()
         def __add__(self, other):
             return query.parameter_list(self.li + other.li)
         def __or__(self, other):
@@ -88,6 +100,8 @@ class query:
             return result
         def apply(self, fn):
             return query.parameter_list([(k, fn(v)) for k, v in self.li])
+        def filter(self, regex):
+            return query.parameter_list([(k, regex.evaluate(v)) for k, v in self.li if regex.matches(v)])
         def __repr__(self):
             return ",\n".join("  - %s: %s"%(k,v) for k,v in self.li)
 
@@ -136,6 +150,15 @@ class query:
         elif hasattr(other, '__call__'):
             # some lambda function, probably also an attribute of the formatters collection class
             q.params = (self.params or query.parameter_list()).apply(other)
+        elif isinstance(other, regex):
+            q.params = (self.params or query.parameter_list()).filter(other)
+        elif isinstance(other, split):
+            orig = (self.params or query.parameter_list())
+            def generate():
+                for k,v in orig.li:
+                    for s in v.split(split.chr):
+                        yield k,s
+            q.params = query.parameter_list(list(generate()))
         else: raise
         return q
     def __add__(self, other):
@@ -167,9 +190,40 @@ class query:
             
             
 class file:
-    def __init__(self, file):
-        self.file = file
+    class file_measures:
+        def __init__(self, file):
+            entities = set()
+            self._instanceCount = 0
+            num_optional_attrs = 0
+            num_optional_attrs_set = 0
+            for inst in file:
+                optional_attrs = list(i for i in range(len(inst)) if inst.wrapped_data.get_argument_optionality(i))
+                optional_attrs_set = len(list(filter(lambda i: inst[i] is not None, optional_attrs)))
+                
+                num_optional_attrs += len(optional_attrs)
+                num_optional_attrs_set += optional_attrs_set
+                
+                entities.add(inst.is_a())
+                
+                self._instanceCount += 1
+            self._entityCount = len(entities)
+            self._optionalAttributesSet = float(num_optional_attrs_set) / num_optional_attrs
+            
+            self._attrs = set(('instanceCount', 'entityCount', 'optionalAttributesSet'))
+        def __getattr__(self, k):
+            assert k in self._attrs
+            return getattr(self, '_%s'%k)
+            
+    class query_wrapper:
+        def __init__(self, *args):
+            self.prefix, self.instance = args
+        def __getattr__(self, k):
+            return query.instance(self.prefix, getattr(self.instance, k))
+
+    def __init__(self, ifcfile):
+        self.file = ifcfile
         self.find_rdf_repos()
+        self._measures = file.file_measures(ifcfile)
     def find_rdf_repos(self):
         def is_uri(s):
             if (s[0]+s[-1]) == '<>':
@@ -183,37 +237,43 @@ class file:
                 uri = is_uri(str)
                 if uri: vocabs.add(uri)
         self.rdf_vocabularies = query(sorted(vocabs), 'RdfVocabularies')
-    def __getattr__(self, ty):
-        instances = list(map(lambda e: query.instance(ty, e), self.file.by_type(ty)))
-        return query(instances, ty)
+    def __getattr__(self, attr):
+        if attr == 'header':
+            return query([query.instance('<file header>', file.query_wrapper('<file header>', self.file.header))], '<file header>')
+        elif attr == 'measures':
+            return query([query.instance('<descriptive measures>', self._measures)], '<descriptive measures>')
+        else:
+            try: by_type = self.file.by_type(attr)
+            except: raise AttributeError("file object does not have an attribute '%s'"%attr)
+            instances = list(map(lambda e: query.instance(attr, e), by_type))
+            return query(instances, attr)
 
-def open(fn): return file(ifc.open(fn))
-
+def open(fn): return file(ifcopenshell.open(fn))
 
 class query_unique: pass
 class query_count: pass
 class formatter: pass
+class split:
+    def __init__(self, chr): self.chr = chr
+class regex:
+    def __init__(self, pattern):
+        self.rx = re.compile(pattern)
+    def matches(self, value):
+        return self.rx.search(value) is not None
+    def evaluate(self, value):
+        return self.rx.search(value).group(1)
+    
 class latlon(formatter):
     @staticmethod
     def to_float(compound):
         magnitudes = [1., 60., 3600., 3600.e6][:len(compound)]
         return sum(a/b for a,b in zip(compound, magnitudes))
     def __init__(self, *args):
-        if len(args) == 1: self.items = args[0]
-        else: self.items = [args]
-    def __add__(self, other):
-        return latlon(self.items + other.items)
+        self.name, self.compound = args
     def __repr__(self):
-        return "Latlon<%s>"%str(self.items)
-    def __getattr__(self, k):
-        try: return [x[1] for x in self.items if x[0] == k][0]
-        except: return None
+        return "%s<%r>"%(self.name, self.compound)
     def to_rdf(self):
-        return '[ geo-pos:lat "%.8f" ; geo-pos:lon "%.8f" ]'%(latlon.to_float(self.Latitude), latlon.to_float(self.Longitude))
-    def __bool__(self):
-        return True if self.Latitude or self.Longitude else False
-    def __nonzero__(self):
-        return self.__bool__()
+        return latlon.to_float(self.compound)
 
 class xsd_date(str):
     def to_rdf(self): return '"%s"^^xsd:date'%self
@@ -225,7 +285,11 @@ class formatters:
     join = lambda li: " ".join(li) if li else None
     unique = query_unique()
     count = query_count()
-    expand_guid = ifc.guid.expand
+    expand_guid = ifcopenshell.guid.expand
+    unit = lambda x: x
+    regex = regex
+    split = split
+    mapping = lambda cls: cls().__getitem__
 
 
 class JsonFormatter:
@@ -241,8 +305,11 @@ class rdf_formatter:
     def __init__(self, name_query, prefixes):
         self.uri = name_query.params.li[0][1]
         self.prefixes = list(prefixes.items())
+    def matches_prefix(self, uri):
+        for prefix, namespace in self.prefixes:
+            if uri.startswith(namespace[1:-1]): return (prefix, namespace[1:-1])
+        return None
     def __lshift__(self, li):
-        lines = []
         def escape(s):
             """
             Escape according to Turtle - Terse RDF Triple Language 3.3. String Escapes
@@ -264,17 +331,40 @@ class rdf_formatter:
                     return "\\u%s"%"%04x"%ord(c)
                 else: return c
             return ''.join(map(escape_char, s))
+        
         def typify(s):
             if isinstance(s, int): return '"%d"^^xsd:integer'%s
-            elif hasattr(s, 'to_rdf'): return s.to_rdf() if bool(s) else None
+            elif isinstance(s, float): return '"%r"^^xsd:decimal'%s
+            elif hasattr(s, 'to_rdf'): return typify(s.to_rdf())
+            elif self.matches_prefix(s): p,n = self.matches_prefix(s); return s.replace(n,p+':')
             else: return '"%s"^^xsd:string'%escape(str(s))
-        for item in li:
-            for p in item.params.li:
-                if p[1] is not None:
-                    predicates = p[0] if isinstance(p[0], (tuple, list)) else [p[0]]
-                    for pred in predicates:
-                        lines.append("<project_%s> %s %s ."%(self.uri,pred,typify(p[1])))
+        
+        def walk():
+            for item in li:
+                for p in item.params.li:
+                    if p[1] is not None:
+                        predicates = p[0] if isinstance(p[0], (tuple, list)) else [p[0]]
+                        for pred in predicates:
+                            yield pred, typify(p[1])
+                            
+        def make_instance(pred):
+            cls, prop = pred.split('/')
+            return "<%s_%s>" % (cls.lower().split(':')[1], self.uri), cls, prop
+
         for ns in self.prefixes:
             print("@prefix %s: %s ."%ns)
+        
         print("")
-        for line in lines: print(line)
+        
+        def emit():
+            instances = set()
+            for pred, value in walk():
+                uri, cls, prop = make_instance(pred)
+                if uri not in instances:
+                    instances.add(uri)
+                    yield "%s a %s ." % (uri, cls)
+                yield "%s %s %s ." % (uri, prop, value)
+                
+        print ("\n".join(sorted(emit())))
+        
+        print ("")

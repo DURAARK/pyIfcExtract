@@ -1,58 +1,86 @@
 import os
 import sys
+
 import ifc_query
 from ifc_query import formatters
+import util.qudt
 
 fn = os.path.normpath(sys.argv[1])
 file = ifc_query.open(fn)
-
-length_unit = file.IfcProject.UnitsInContext.Units.filter(UnitType="LENGTHUNIT")
 
 ifc_query.rdf_formatter(
     file.IfcProject.GlobalId >> formatters.expand_guid,
     {   'xsd'        : '<http://www.w3.org/2001/XMLSchema#>'        ,
         'duraark'    : '<http://duraark.eu/voabularies/buildm#>'    ,
-        'dc'         : '<http://purl.org/dc/elements/1.1/>'         ,
-        'dct'        : '<http://purl.org/dc/terms/>'                ,
-        'dbpedia-owl': '<http://dbpedia.org/ontology/>'             ,
-        'dbp-prop'   : '<http://dbpedia.org/property/>'             ,
-        'geo-pos'    : '<http://www.w3.org/2003/01/geo/wgs84_pos#>' ,
-        'foaf'       : '<http://xmlns.com/foaf/0.1/>'               }
+        'unit'       : '<%s>'%util.qudt.namespace                   }
 ) << [
-	
-	file.IfcProject.GlobalId >> "duraark:object_identifier",
+	file.header.file_name.author >> "duraark:IFCSPFFile/duraark:creator",
 
-    (file.IfcProject.LongName | file.IfcProject.Name) >> "foaf:name",
-    
-    file.IfcProject.Description >> "dc:description",
-    
-    file.IfcProject.OwnerHistory.CreationDate >> formatters.time
-        >> ("dbp-prop:startDate", "dbpedia-owl:buildingStartYear"),
-    
-    length_unit.select('IfcSIUnit').Prefix + length_unit.Name
-        >> "duraark:length_unit",
-        
-    file.IfcApplication.ApplicationDeveloper.Name + ' ' +
-        file.IfcApplication.ApplicationFullName + ' ' +
-        file.IfcApplication.Version
-        >> "duraark:authoring_tool",
-        
-    (file.IfcSite.RefLatitude >> formatters.latitude) +
-        (file.IfcSite.RefLongitude >> formatters.longitude)
-        >> "foaf:based_near",
-        
-    file.IfcBuilding.IsDecomposedBy.RelatedObjects >> formatters.count
-        >> "duraark:floor_count",
-        
-    file.IfcSpace >> formatters.count >> "duraark:room_count",
-    
-    file.IfcBuilding.BuildingAddress.AddressLines >> formatters.join
-        >> "dbpedia-owl:address",
-        
+    file.header.file_name.organization >> "duraark:IFCSPFFile/duraark:creator",
+
+    file.header.file_name.preprocessor_version >> "duraark:IFCSPFFile/duraark:authoringTool",
+
+    file.header.file_name.originating_system >> "duraark:IFCSPFFile/duraark:authoringTool",
+
+    file.header.file_schema.schema_identifiers >> "duraark:IFCSPFFile/duraark:fileSchema",
+
+    file.header.file_description.description >> formatters.regex(r"ViewDefinition\s\[([^\]+])\]") >> formatters.split(",") >> "duraark:IFCSPFFile/duraark:viewDefinition",
+
     file.IfcOwnerHistory.OwningUser.ThePerson.GivenName + ' ' +
         file.IfcOwnerHistory.OwningUser.ThePerson.FamilyName
-        >> formatters.unique >> "dc:creator",
-        
-    file.rdf_vocabularies >> "duraark:enrichment_vocabulary"
-	
+        >> formatters.unique >> "duraark:IFCSPFFile/duraark:creator",
+
+    file.header.file_name.name >> "duraark:IFCSPFFile/duraark:name",
+
+    file.header.file_name.time_stamp >> "duraark:IFCSPFFile/duraark:dateCreated",
+
+	(file.IfcProject.LongName | file.IfcProject.Name) >> "duraark:PhysicalAsset/duraark:name",
+
+    (file.IfcSite.RefLatitude >> formatters.latitude) >> "duraark:PhysicalAsset/duraark:latitude",
+
+    (file.IfcSite.RefLongitude >> formatters.longitude) >> "duraark:PhysicalAsset/duraark:longitude",
+
+    file.IfcBuilding.BuildingAddress.AddressLines >> formatters.join >> "duraark:PhysicalAsset/duraark:streetAddress",
+
+    file.IfcProject.Description >> "duraark:PhysicalAsset/duraark:description",
+
+    file.IfcProject.GlobalId >> "duraark:PhysicalAsset/duraark:identifier",
+
+    file.IfcGeometricRepresentationContext.ContextType >> formatters.unique >> "duraark:IFCSPFFile/duraark:hasType",
+
+    file.IfcProject.UnitsInContext.Units.select("IfcSIUnit").Prefix +
+        file.IfcProject.UnitsInContext.Units.select("IfcSIUnit").Name >> formatters.mapping(util.qudt.qudt) >>
+        "duraark:IFCSPFFile/duraark:unit",
+
+    file.IfcBuilding.IsDefinedBy.RelatingPropertyDefinition.HasProperties.filter(Name="GrossPlannedArea").NominalValue.wrappedValue >> "duraark:PhysicalAsset/duraark:buildingArea",
+
+    file.IfcBuilding >> formatters.count >> "duraark:PhysicalAsset/duraark:buildingCount",
+
+    file.IfcBuilding.IsDecomposedBy.RelatedObjects >> formatters.count >> "duraark:PhysicalAsset/duraark:floorCount",
+
+    file.IfcSpace >> formatters.count >> "duraark:PhysicalAsset/duraark:spaceCount",
+
+    file.IfcWall >> formatters.count >> "duraark:PhysicalAsset/duraark:wallCount",
+
+    file.IfcWindow >> formatters.count >> "duraark:PhysicalAsset/duraark:windowCount",
+
+    file.IfcDoor >> formatters.count >> "duraark:PhysicalAsset/duraark:doorCount",
+
+    file.IfcColumn >> formatters.count >> "duraark:PhysicalAsset/duraark:columnCount",
+
+    file.IfcProduct >> formatters.count >> "duraark:PhysicalAsset/duraark:componentCount",
+
+    file.IfcRelationship >> formatters.count >> "duraark:IFCSPFFile/duraark:relationshipCount",
+
+    file.IfcActor >> formatters.count >> "duraark:IFCSPFFile/duraark:actorCount",
+
+    file.IfcApplication.ApplicationFullName >> "duraark:IFCSPFFile/duraark:authoringTool",
+
+    file.measures.optionalAttributesSet >> "duraark:IFCSPFFile/duraark:optionalAttributesSet",
+
+    file.measures.instanceCount >> "duraark:IFCSPFFile/duraark:instanceCount",
+
+    file.measures.entityCount >> "duraark:IFCSPFFile/duraark:entityCount",
+
+    file.rdf_vocabularies >> "duraark:webResourceList"
 ]

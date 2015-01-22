@@ -6,7 +6,6 @@ uri_val = re.compile("^(http://.+)$")
 map = {'str':'string', 'int':'integer'}
 
 def obtain(f):
-    return_list = []
     es = f.by_type("IfcPropertySet")
     for e in es:
         os = e.PropertyDefinitionOf
@@ -41,5 +40,4 @@ def obtain(f):
                                         ty = val.__class__.__name__
                                         object = '"%s"^^xsd:%s'%(str(val), map.get(ty, ty))
                             if predicate_is_uri:
-                                return_list.append((":%s"%guid, predicate, object))
-    return return_list
+                                yield (":%s"%guid, predicate, object)
