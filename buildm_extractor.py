@@ -47,6 +47,8 @@ ifc_query.rdf_formatter(
     file.IfcProject.GlobalId >> "duraark:PhysicalAsset/duraark:identifier",
 
     file.IfcGeometricRepresentationContext.ContextType >> formatters.unique >> "duraark:IFCSPFFile/duraark:hasType",
+    
+    file.IfcGeometricRepresentationContext.Precision >> formatters.unique >> "duraark:IFCSPFFile/duraark:geometricPrecision",
 
     file.IfcProject.UnitsInContext.Units.select("IfcSIUnit").Prefix +
         file.IfcProject.UnitsInContext.Units.select("IfcSIUnit").Name >> formatters.mapping(util.qudt.qudt) >>
