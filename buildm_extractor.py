@@ -9,9 +9,13 @@ fn = os.path.normpath(sys.argv[1])
 file = ifc_query.open(fn)
 
 ifc_query.rdf_formatter(
+    'buildm_v3.0.rdf',
+    'http://data.duraark.eu/resource/',
     file.IfcProject.GlobalId >> formatters.expand_guid,
     {   'xsd'        : '<http://www.w3.org/2001/XMLSchema#>'        ,
-        'duraark'    : '<http://duraark.eu/voabularies/buildm#>'    ,
+        'duraark'    : '<http://data.duraark.eu/vocab/>'            ,
+        'schema'     : '<http://schema.org/>'                       ,
+        'xsd112'     : '<http://www.w3.org/TR/xmlschema11-2/#>'     ,
         'unit'       : '<%s>'%util.qudt.namespace                   }
 ) << [
 	file.header.file_name.author >> "duraark:IFCSPFFile/duraark:creator",

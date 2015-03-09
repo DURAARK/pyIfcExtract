@@ -5,6 +5,8 @@ import string
 import datetime
 import ifcopenshell
 
+from xml.dom.minidom import parse as parse_xml
+
 try: from functools import reduce
 except: pass
 
@@ -302,7 +304,9 @@ class JsonFormatter:
 json_formatter = JsonFormatter()
 
 class rdf_formatter:
-    def __init__(self, name_query, prefixes):
+    def __init__(self, schema, ns, name_query, prefixes):
+        self.schema_dom = parse_xml(schema)
+        self.ns = ns
         self.uri = name_query.params.li[0][1]
         self.prefixes = list(prefixes.items())
     def matches_prefix(self, uri):
@@ -331,11 +335,34 @@ class rdf_formatter:
                     return "\\u%s"%"%04x"%ord(c)
                 else: return c
             return ''.join(map(escape_char, s))
+            
+        def lookup(pred):
+            cls, prop = map(lambda s: s.split(':')[1], pred.split('/'))
+            def filterByDomainAndPredicate(node):
+                if node.attributes['rdf:about'].value != prop: return False
+                domains = node.getElementsByTagName('rdfs:domain')
+                if len(domains) != 1: return False
+                try:
+                    val = domains[0].attributes['rdf:resource'].value
+                    if val.startswith('#'): val = val[1:]
+                    return val == cls
+                except: return True
+            props = list(filter(filterByDomainAndPredicate, self.schema_dom.getElementsByTagName('rdf:Property')))
+            if len(props) != 1: return None
+            ranges = props[0].getElementsByTagName('rdfs:range')
+            if len(ranges) != 1: return None
+            uri = ranges[0].attributes['rdf:resource'].value
+            if self.matches_prefix(uri): 
+                p,n = self.matches_prefix(uri); 
+                uri = uri.replace(n,p+':')
+            return uri
         
-        def typify(s):
-            if isinstance(s, int): return '"%d"^^xsd:integer'%s
-            elif isinstance(s, float): return '"%r"^^xsd:decimal'%s
-            elif hasattr(s, 'to_rdf'): return typify(s.to_rdf())
+        def typify(pred, s):
+            schema_type = lookup(pred)
+            if hasattr(s, 'to_rdf'): return typify(pred, s.to_rdf())
+            elif schema_type is not None: return '"%s"^^%s'%(escape(str(s)), schema_type)
+            elif isinstance(s, int): return '"%d"^^xsd:integer'%s
+            elif isinstance(s, float): return '"%r"^^xsd:decimal'%s            
             elif self.matches_prefix(s): p,n = self.matches_prefix(s); return s.replace(n,p+':')
             else: return '"%s"^^xsd:string'%escape(str(s))
         
@@ -345,11 +372,11 @@ class rdf_formatter:
                     if p[1] is not None:
                         predicates = p[0] if isinstance(p[0], (tuple, list)) else [p[0]]
                         for pred in predicates:
-                            yield pred, typify(p[1])
+                            yield pred, typify(pred, p[1])
                             
         def make_instance(pred):
             cls, prop = pred.split('/')
-            return "<%s_%s>" % (cls.lower().split(':')[1], self.uri), cls, prop
+            return "<%s%s_%s>" % (self.ns, cls.lower().split(':')[1], self.uri), cls, prop
 
         for ns in self.prefixes:
             print("@prefix %s: %s ."%ns)
@@ -362,9 +389,15 @@ class rdf_formatter:
                 uri, cls, prop = make_instance(pred)
                 if uri not in instances:
                     instances.add(uri)
-                    yield "%s a %s ." % (uri, cls)
-                yield "%s %s %s ." % (uri, prop, value)
+                    yield (uri, "a", cls)
+                yield (uri, prop, value)
                 
-        print ("\n".join(sorted(emit())))
+        statements = sorted(emit())
+        ps = None
+        for s,p,o in statements:
+            if ps is not None:
+                sys.stdout.write(" ;\n" if ps == s else " .\n\n")
+            sys.stdout.write(" ".join(("    " if ps == s else s,p,o)))
+            ps = s
+        sys.stdout.write(" .\n")
         
-        print ("")
