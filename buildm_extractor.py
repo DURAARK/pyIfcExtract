@@ -9,8 +9,14 @@ fn = os.path.normpath(sys.argv[1])
 assert os.path.isfile(fn)
 file = ifc_query.open(fn)
 
+schema_file = sys.argv[2]
+if not schema_file:
+    schema_file = 'buildm_v3.0.rdf'
+
+print('Using schema: ' + schema_file);
+
 ifc_query.rdf_formatter(
-    'buildm_v3.0.rdf',
+    schema_file,
     'http://data.duraark.eu/resource/',
     file.IfcProject.GlobalId >> formatters.expand_guid,
     {   'xsd'        : '<http://www.w3.org/2001/XMLSchema#>'        ,
