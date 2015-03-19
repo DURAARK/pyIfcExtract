@@ -13,8 +13,6 @@ schema_file = sys.argv[2]
 if not schema_file:
     schema_file = 'buildm_v3.0.rdf'
 
-print('Using schema: ' + schema_file);
-
 ifc_query.rdf_formatter(
     schema_file,
     'http://data.duraark.eu/resource/',
