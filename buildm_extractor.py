@@ -6,6 +6,7 @@ from ifc_query import formatters
 import util.qudt
 
 fn = os.path.normpath(sys.argv[1])
+assert os.path.isfile(fn)
 file = ifc_query.open(fn)
 
 ifc_query.rdf_formatter(
