@@ -4,6 +4,8 @@ import json
 import string
 import datetime
 import ifcopenshell
+from collections import namedtuple
+import operator
 
 from xml.dom.minidom import parse as parse_xml
 
@@ -12,8 +14,8 @@ except: pass
 
 import rdf_extractor
 
-class query:
-    class instance_list:
+class query(object):
+    class instance_list(object):
         def __init__(self, prefix=None, instances=None):
             self.prefix = prefix or ''
             self.instances = instances or []
@@ -37,7 +39,7 @@ class query:
                 [i for i in self.instances if i.instance.wrapped_data.is_a(ty)]
             )
             
-    class instance:
+    class instance(object):
         def __init__(self, prefix, instance):
             self.prefix = prefix
             self.instance = instance
@@ -52,7 +54,7 @@ class query:
         def __getattr__(self, k):
             return self.wrap_value(getattr(self.instance, k), k)
             
-    class parameter_list:
+    class parameter_list(object):
         def __init__(self, li=None):
             vector_names = ['int_vector', 'float_vector', 'double_vector', 'string_vector', 'material_vector']
             vector_types = set(getattr(ifcopenshell.ifcopenshell_wrapper, nm) for nm in vector_names)
@@ -191,8 +193,8 @@ class query:
             return "<Bound query '%s'\n  Parameters:\n%s\n>"%(self.prefix, self.params)
             
             
-class file:
-    class file_measures:
+class file(object):
+    class file_measures(object):
         def __init__(self, file):
             entities = set()
             self._instanceCount = 0
@@ -216,7 +218,7 @@ class file:
             assert k in self._attrs
             return getattr(self, '_%s'%k)
             
-    class query_wrapper:
+    class query_wrapper(object):
         def __init__(self, *args):
             self.prefix, self.instance = args
         def __getattr__(self, k):
@@ -252,12 +254,12 @@ class file:
 
 def open(fn): return file(ifcopenshell.open(fn))
 
-class query_unique: pass
-class query_count: pass
-class formatter: pass
-class split:
+class query_unique(object): pass
+class query_count(object): pass
+class formatter(object): pass
+class split(object):
     def __init__(self, chr): self.chr = chr
-class regex:
+class regex(object):
     def __init__(self, pattern):
         self.rx = re.compile(pattern)
     def matches(self, value):
@@ -280,21 +282,22 @@ class latlon(formatter):
 class xsd_date(str):
     def to_rdf(self): return '"%s"^^xsd:date'%self
         
-class formatters:
-    time = lambda ts: xsd_date(datetime.datetime.fromtimestamp(ts).strftime('%Y-%m-%d %H:%M:%S'))
-    latitude = lambda v: None if v is None else latlon('Latitude', v)
-    longitude = lambda v: None if v is None else latlon('Longitude', v)
-    join = lambda li: " ".join(li) if li else None
-    unique = query_unique()
-    count = query_count()
-    expand_guid = ifcopenshell.guid.expand
-    unit = lambda x: x
-    regex = regex
-    split = split
-    mapping = lambda cls: cls().__getitem__
+formatters_list = [
+    ("time"        , lambda ts: xsd_date(datetime.datetime.fromtimestamp(ts).strftime('%Y-%m-%d %H:%M:%S')) ),
+    ("latitude"    , lambda v: None if v is None else latlon('Latitude', v)                                 ),
+    ("longitude"   , lambda v: None if v is None else latlon('Longitude', v)                                ),
+    ("join"        , lambda li: " ".join(li) if li else None                                                ),
+    ("unique"      , query_unique()                                                                         ),
+    ("count"       , query_count()                                                                          ),
+    ("expand_guid" , ifcopenshell.guid.expand                                                               ),
+    ("unit"        , lambda x: x                                                                            ),
+    ("regex"       , regex                                                                                  ),
+    ("split"       , split                                                                                  ),
+    ("mapping"     , lambda cls: cls().__getitem__                                                          )
+]
+formatters = namedtuple("formatters_type", map(operator.itemgetter(0), formatters_list))(*map(operator.itemgetter(1),formatters_list))
 
-
-class JsonFormatter:
+class JsonFormatter(object):
     def __lshift__(self, li):
         di = {}
         for item in li:
@@ -303,7 +306,7 @@ class JsonFormatter:
 
 json_formatter = JsonFormatter()
 
-class rdf_formatter:
+class rdf_formatter(object):
     def __init__(self, schema, ns, name_query, prefixes):
         self.schema_dom = parse_xml(schema)
         self.ns = ns
