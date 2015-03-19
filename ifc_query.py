@@ -282,8 +282,8 @@ class xsd_date(str):
         
 class formatters:
     time = lambda ts: xsd_date(datetime.datetime.fromtimestamp(ts).strftime('%Y-%m-%d %H:%M:%S'))
-    latitude = lambda v: latlon('Latitude', v)
-    longitude = lambda v: latlon('Longitude', v)
+    latitude = lambda v: None if v is None else latlon('Latitude', v)
+    longitude = lambda v: None if v is None else latlon('Longitude', v)
     join = lambda li: " ".join(li) if li else None
     unique = query_unique()
     count = query_count()
