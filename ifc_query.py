@@ -6,6 +6,8 @@ import datetime
 import ifcopenshell
 from collections import namedtuple
 import operator
+import inspect
+import functools
 
 from xml.dom.minidom import parse as parse_xml
 
@@ -103,7 +105,34 @@ class query(object):
                     result.li.append((k, v))
             return result
         def apply(self, fn):
-            return query.parameter_list([(k, fn(v)) for k, v in self.li])
+            def flatten_functor(fn):
+                while not (inspect.isfunction(fn) or inspect.ismethod(fn)):
+                    if hasattr(fn, '__init__'): fn = fn.__init__
+                    elif hasattr(fn, '__call__'): fn = fn.__call__
+                    else: raise ValueError("%r of type %r is not callable" % (fn, type(fn)))
+                return fn
+
+            def get_arg_count(fn):
+                """
+                A wrapper that returns the length of arguments returned
+                by inspect.getargspec() but ignores the 'self' argument
+                on bound methods and handles functools.partial instances
+                """
+                if isinstance(fn, functools.partial):
+                    fn2, applied = fn.func, len(fn.args)
+                else:
+                    fn2, applied = fn, 0
+                return len(list(filter(lambda arg_name: arg_name != 'self', inspect.getargspec(flatten_functor(fn2)).args))) - applied
+                
+            argc = get_arg_count(fn)
+            if argc > 1:
+                simplify = lambda x: x.to_rdf() if hasattr(x, 'to_rdf') else x
+                argv = map(simplify, map(operator.itemgetter(1), self.li))
+                k = ",".join(map(operator.itemgetter(0), self.li))
+                return query.parameter_list([(k, fn(*argv))])
+            else:
+                return query.parameter_list([(k, fn(v)) for k, v in self.li])
+                
         def filter(self, regex):
             return query.parameter_list([(k, regex.evaluate(v)) for k, v in self.li if regex.matches(v)])
         def __repr__(self):
@@ -172,6 +201,10 @@ class query(object):
             return q
         else:
             return self >> (lambda s: (s or '') + other)
+    def __xor__(self, other):
+        q = query([], self.prefix)
+        q.params = (self.params or query.parameter_list()) + (other.params or query.parameter_list())
+        return q
             
     def filter(self, **kwargs):
         pattern_class = re.compile("").__class__
@@ -363,6 +396,7 @@ class rdf_formatter(object):
         def typify(pred, s):
             schema_type = lookup(pred)
             if hasattr(s, 'to_rdf'): return typify(pred, s.to_rdf())
+            elif s is None: return None
             elif schema_type is not None: return '"%s"^^%s'%(escape(str(s)), schema_type)
             elif isinstance(s, int): return '"%d"^^xsd:integer'%s
             elif isinstance(s, float): return '"%r"^^xsd:decimal'%s            
@@ -375,7 +409,9 @@ class rdf_formatter(object):
                     if p[1] is not None:
                         predicates = p[0] if isinstance(p[0], (tuple, list)) else [p[0]]
                         for pred in predicates:
-                            yield pred, typify(pred, p[1])
+                            val = typify(pred, p[1])
+                            if val is not None:
+                                yield pred, val
                             
         def make_instance(pred):
             cls, prop = pred.split('/')
