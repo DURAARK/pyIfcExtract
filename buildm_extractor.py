@@ -2,16 +2,20 @@ import os
 import sys
 
 import ifc_query
-from ifc_query import formatters
+
+import util.geo
 import util.qudt
+
+from ifc_query import formatters
 
 fn = os.path.normpath(sys.argv[1])
 assert os.path.isfile(fn)
 file = ifc_query.open(fn)
 
-schema_file = sys.argv[2]
-if not schema_file:
-    schema_file = 'buildm_v3.0.rdf'
+try: schema_file = sys.argv[2]
+except: schema_file = 'buildm_v3.0.rdf'
+
+geo_lookup = util.geo.lookup_factory(user_name="")
 
 ifc_query.rdf_formatter(
     schema_file,
@@ -21,7 +25,8 @@ ifc_query.rdf_formatter(
         'duraark'    : '<http://data.duraark.eu/vocab/>'            ,
         'schema'     : '<http://schema.org/>'                       ,
         'xsd112'     : '<http://www.w3.org/TR/xmlschema11-2/#>'     ,
-        'unit'       : '<%s>'%util.qudt.namespace                   }
+        'unit'       : '<%s>'%util.qudt.namespace                   ,
+        'geonames'   : '<http://sws.geonames.org/>'                 }
 ) << [
 	file.header.file_name.author >> "duraark:IFCSPFFile/duraark:creator",
 
@@ -48,6 +53,10 @@ ifc_query.rdf_formatter(
     (file.IfcSite.RefLatitude >> formatters.latitude) >> "duraark:PhysicalAsset/duraark:latitude",
 
     (file.IfcSite.RefLongitude >> formatters.longitude) >> "duraark:PhysicalAsset/duraark:longitude",
+    
+    ((file.IfcSite.RefLatitude >> formatters.latitude)
+        ^ (file.IfcSite.RefLongitude >> formatters.longitude))
+        >> geo_lookup >> "duraark:PhysicalAsset/duraark:locatedIn",
 
     file.IfcBuilding.BuildingAddress.AddressLines >> formatters.join >> "duraark:PhysicalAsset/duraark:streetAddress",
 
