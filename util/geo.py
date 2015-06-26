@@ -8,6 +8,7 @@ URL = "%s/findNearbyPlaceName?username=%%(user_name)s&type=json&lat=%%(lat)f&lng
 class lookup:
     def __init__ (self, user_name, lat, lon):
         self.user_name, self.lat, self.lon = user_name, lat, lon
+        self.user_name = "duraark"
     def __call__(self):
         if self.lat is not None and self.lon is not None:
             http = httplib2.Http('.cache')
@@ -22,4 +23,4 @@ lookup_factory = lambda user_name: functools.partial(lookup, user_name)
         
 if __name__ == '__main__':
     # USER_NAME needs to be provided by end user
-    print(lookup(USER_NAME, 47.4, 9)())
+    print(lookup("duraark", 47.4, 9)())
