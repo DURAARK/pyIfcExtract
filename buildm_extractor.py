@@ -104,5 +104,13 @@ ifc_query.rdf_formatter(
 
     file.measures.entityCount >> "duraark:IFCSPFFile/duraark:entityCount",
 
-    file.rdf_vocabularies >> "duraark:webResourceList"
+    file.rdf_vocabularies >> "duraark:webResourceList",
+    
+    # ifcm fields:
+    
+    file.header.file_name.name >> "duraark:IFCMContainer/duraark:IFCMheader/duraark:name",
+    
+    file.IfcApplication.ApplicationFullName >> "duraark:IFCMContainer/duraark:IFCMIfcParameters/duraark:ifcApplication",
+    
+    file.IfcWall >> formatters.count >> "duraark:IFCMContainer/duraark:IFCMCountObjects/duraark:wallCount"
 ]
