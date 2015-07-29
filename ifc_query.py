@@ -373,10 +373,7 @@ class rdf_formatter(object):
             return ''.join(map(escape_char, s))
             
         def lookup(pred):
-            try:
-                cls, prop = map(lambda s: s.split(':')[1], pred.split('/'))
-            except:
-                return None
+            cls, prop = map(lambda s: s.split(':')[1], pred.split('/'))
             def filterByDomainAndPredicate(node):
                 if node.attributes['rdf:about'].value != prop: return False
                 domains = node.getElementsByTagName('rdfs:domain')
@@ -417,13 +414,8 @@ class rdf_formatter(object):
                                 yield pred, val
                             
         def make_instance(pred):
-            try:
-                cls, prop = pred.split('/')
-                return "<%s%s_%s>" % (self.ns, cls.lower().split(':')[1], self.uri), cls, prop
-            except:
-                cls1, cls2, prop = pred.split('/')
-                return "<%s%s_%s>" % (self.ns, cls1.lower().split(':')[1], self.uri), cls1,\
-                       "<%s%s_%s>" % (self.ns, cls2.lower().split(':')[1], self.uri), cls2, prop
+            cls, prop = pred.split('/')
+            return "<%s%s_%s>" % (self.ns, cls.lower().split(':')[1], self.uri), cls, prop
 
         for ns in self.prefixes:
             print("@prefix %s: %s ."%ns)
@@ -433,22 +425,12 @@ class rdf_formatter(object):
         def emit():
             instances = set()
             for pred, value in walk():
-                try:
-                    uri, cls, prop = make_instance(pred)
-                    if uri not in instances:
-                        instances.add(uri)
-                        yield (uri, "a", cls)
-                    yield (uri, prop, value)
-                except:
-                    uri1, cls1, uri2, cls2, prop = make_instance(pred)
-                    for uri, cls in ((uri1, cls1), (uri2, cls2)):
-                        if uri not in instances:
-                            instances.add(uri)
-                            yield (uri, "a", cls)
-                    # TODO: hardcoded?
-                    yield (uri1, "duraark:hasPart", uri2)
-                    yield (uri2, prop, value)
-                    
+                uri, cls, prop = make_instance(pred)
+                if uri not in instances:
+                    instances.add(uri)
+                    yield (uri, "a", cls)
+                yield (uri, prop, value)
+                
         statements = sorted(emit())
         ps = None
         for s,p,o in statements:
