@@ -440,3 +440,39 @@ class rdf_formatter(object):
             ps = s
         sys.stdout.write(" .\n")
         
+class xml_formatter(object):
+    class xml_formatter_attribute(object):
+        def __init__(self, formatter, path):
+            object.__setattr__(self, 'formatter', formatter)
+            object.__setattr__(self, 'path', path)
+        def __getattr__(self, k):
+            return xml_formatter.xml_formatter_attribute(self.formatter, self.path + [k])
+        def __setattr__(self, k, v):
+            self.formatter.register(self.path + [k], v)
+    def __init__(self):
+        self.attributes = []
+    def __getattr__(self, k):
+        return xml_formatter.xml_formatter_attribute(self, [k])
+    def register(self, path, vs):
+        for k, v in vs.params.li:
+            self.attributes.append((path, v))
+    def emit(self):
+        import xml.etree.cElementTree as ET
+        self.attributes.sort()
+        previous_path = []
+        nodes_by_path = {}
+        root_path = None
+        for path, value in self.attributes:
+            for i, n in enumerate(path):
+                node_path, parent_path = ".".join(path[0:i+1]), ".".join(path[0:i])
+                if node_path in nodes_by_path: continue
+                if root_path is None:
+                    root_path = node_path
+                    nodes_by_path[node_path] = ET.Element(n)
+                else:
+                    nodes_by_path[node_path] = ET.SubElement(nodes_by_path[parent_path], n)
+            
+            nodes_by_path[node_path].text = str(value)
+        
+        # tree = ET.ElementTree(nodes_by_path[root_path])
+        sys.stdout.write(ET.tostring(nodes_by_path[root_path]))
