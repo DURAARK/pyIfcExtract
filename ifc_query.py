@@ -454,8 +454,10 @@ class xml_formatter(object):
     def __getattr__(self, k):
         return xml_formatter.xml_formatter_attribute(self, [k])
     def register(self, path, vs):
+        if vs.params is None: return
         for k, v in vs.params.li:
-            self.attributes.append((path, v))
+            if v is not None:
+                self.attributes.append((path, v))
     def emit(self):
         import xml.etree.cElementTree as ET
         self.attributes.sort()
@@ -465,14 +467,14 @@ class xml_formatter(object):
         for path, value in self.attributes:
             for i, n in enumerate(path):
                 node_path, parent_path = ".".join(path[0:i+1]), ".".join(path[0:i])
-                if node_path in nodes_by_path: continue
+                if node_path in nodes_by_path and i < len(path) - 1: continue
                 if root_path is None:
                     root_path = node_path
-                    nodes_by_path[node_path] = ET.Element(n)
+                    node = nodes_by_path[node_path] = ET.Element(n)
                 else:
-                    nodes_by_path[node_path] = ET.SubElement(nodes_by_path[parent_path], n)
+                    node = nodes_by_path[node_path] = ET.SubElement(nodes_by_path[parent_path], n)
             
-            nodes_by_path[node_path].text = str(value)
+            node.text = str(value)
         
         # tree = ET.ElementTree(nodes_by_path[root_path])
         sys.stdout.write(ET.tostring(nodes_by_path[root_path]))
