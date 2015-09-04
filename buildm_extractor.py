@@ -22,7 +22,7 @@ ifc_query.rdf_formatter(
     'http://data.duraark.eu/resource/',
     file.IfcProject.GlobalId >> formatters.expand_guid,
     {   'xsd'        : '<http://www.w3.org/2001/XMLSchema#>'        ,
-        'duraark'    : '<http://data.duraark.eu/vocab/>'            ,
+        'duraark'    : '<http://data.duraark.eu/vocab/buildm/>'     ,
         'schema'     : '<http://schema.org/>'                       ,
         'xsd112'     : '<http://www.w3.org/TR/xmlschema11-2/#>'     ,
         'unit'       : '<%s>'%util.qudt.namespace                   ,
