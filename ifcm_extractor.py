@@ -21,11 +21,14 @@ output.ifcm.header.authorization                            = file.header.file_n
 output.ifcm.header.fileSchema                               = file.header.file_schema.schema_identifiers
 output.ifcm.header.viewDefinition                           = file.header.file_description.description >> formatters.regex(r"ViewDefinition\s\[([^\]+])\]") >> formatters.split(",")
 output.ifcm.header.exportOptions                            = file.header.file_description.description >> formatters.regex(r"ViewDefinition\s\[([^\]+])\]") >> formatters.split(",")
-                                                            
+
 output.ifcm.ifcparameters.ifcApplication                    = file.IfcApplication.ApplicationFullName
 output.ifcm.ifcparameters.IfcGeometricRepresentationContext = file.IfcGeometricRepresentationContext.ContextType
+# SHould those values be appended and how?
+#output.ifcm.ifcparameters.IfcGeometricRepresentationContext = file.IfcGeometricRepresentationContext.Precision
+#output.ifcm.ifcparameters.IfcGeometricRepresentationContext = file.IfcGeometricRepresentationContext.CoordinateSpaceDimension
 output.ifcm.ifcparameters.ifcSiUnit                         = file.IfcSIUnit.Prefix + file.IfcSIUnit.Name
-                                                            
+
 output.ifcm.quantities.floorCount                           = file.IfcBuilding.IsDecomposedBy.RelatedObjects >> formatters.count
 output.ifcm.quantities.roomCount                            = file.IfcSpace >> formatters.count
 output.ifcm.quantities.wallCount                            = file.IfcWall >> formatters.count
@@ -36,11 +39,11 @@ output.ifcm.quantities.columnCount                          = file.IfcColumn >> 
 output.ifcm.quantities.numberOfComponents                   = file.IfcProduct >> formatters.count
 output.ifcm.quantities.numberOfRelations                    = file.IfcRelationship >> formatters.count
 output.ifcm.quantities.numberOfActors                       = file.IfcActor >> formatters.count
-                                                            
+
 output.ifcm.informationMetric.numberOfEntityTypesUsed       = file.measures.entityCount
 output.ifcm.informationMetric.numberOfTotalEntitiesUsed     = file.measures.instanceCount
 output.ifcm.informationMetric.optionalAttributes            = file.measures.optionalAttributesSet
-                                                            
+
 output.ifcm.Dependencies.webResourceLink                    = file.rdf_vocabularies
 
 output.emit()

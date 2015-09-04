@@ -22,7 +22,7 @@ ifc_query.rdf_formatter(
     'http://data.duraark.eu/resource/',
     file.IfcProject.GlobalId >> formatters.expand_guid,
     {   'xsd'        : '<http://www.w3.org/2001/XMLSchema#>'        ,
-        'duraark'    : '<http://data.duraark.eu/vocab/>'            ,
+        'duraark'    : '<http://data.duraark.eu/vocab/buildm/>'     ,
         'schema'     : '<http://schema.org/>'                       ,
         'xsd112'     : '<http://www.w3.org/TR/xmlschema11-2/#>'     ,
         'unit'       : '<%s>'%util.qudt.namespace                   ,
@@ -32,11 +32,10 @@ ifc_query.rdf_formatter(
 
     file.header.file_name.organization >> "duraark:IFCSPFFile/duraark:creator",
 
-    file.header.file_name.preprocessor_version >> "duraark:IFCSPFFile/duraark:authoringTool",
-
-    file.header.file_name.originating_system >> "duraark:IFCSPFFile/duraark:authoringTool",
-
-    file.header.file_schema.schema_identifiers >> "duraark:IFCSPFFile/duraark:fileSchema",
+    # ifcm attributes
+    #file.header.file_name.preprocessor_version >> "duraark:IFCSPFFile/duraark:authoringTool",
+    #file.header.file_name.originating_system >> "duraark:IFCSPFFile/duraark:authoringTool",
+    #file.header.file_schema.schema_identifiers >> "duraark:IFCSPFFile/duraark:fileSchema",
 
     file.header.file_description.description >> formatters.regex(r"ViewDefinition\s\[([^\]+])\]") >> formatters.split(",") >> "duraark:IFCSPFFile/duraark:viewDefinition",
 
@@ -44,7 +43,7 @@ ifc_query.rdf_formatter(
         file.IfcOwnerHistory.OwningUser.ThePerson.FamilyName
         >> formatters.unique >> "duraark:IFCSPFFile/duraark:creator",
 
-    file.header.file_name.name >> "duraark:IFCSPFFile/duraark:name",
+    file.header.file_name.name >> "duraark:IFCSPFFile/duraark:filename",
 
     file.header.file_name.time_stamp >> "duraark:IFCSPFFile/duraark:dateCreated",
 
@@ -53,10 +52,10 @@ ifc_query.rdf_formatter(
     (file.IfcSite.RefLatitude >> formatters.latitude) >> "duraark:PhysicalAsset/duraark:latitude",
 
     (file.IfcSite.RefLongitude >> formatters.longitude) >> "duraark:PhysicalAsset/duraark:longitude",
-    
+
     ((file.IfcSite.RefLatitude >> formatters.latitude)
         ^ (file.IfcSite.RefLongitude >> formatters.longitude))
-        >> geo_lookup >> "duraark:PhysicalAsset/duraark:locatedIn",
+        >> geo_lookup >> "duraark:PhysicalAsset/duraark:location",
 
     file.IfcBuilding.BuildingAddress.AddressLines >> formatters.join >> "duraark:PhysicalAsset/duraark:streetAddress",
 
@@ -65,10 +64,10 @@ ifc_query.rdf_formatter(
     file.IfcProject.GlobalId >> "duraark:PhysicalAsset/duraark:identifier",
 
     file.IfcGeometricRepresentationContext.ContextType >> formatters.unique >> "duraark:IFCSPFFile/duraark:hasType",
-    
-    file.IfcGeometricRepresentationContext.Precision >> formatters.unique >> "duraark:IFCSPFFile/duraark:geometricPrecision",
-    
-    file.IfcGeometricRepresentationContext.CoordinateSpaceDimension >> formatters.unique >> "duraark:IFCSPFFile/duraark:dimensionCount",
+
+    # ifcm attributes
+    #file.IfcGeometricRepresentationContext.Precision >> formatters.unique >> "duraark:IFCSPFFile/duraark:geometricPrecision",
+    #file.IfcGeometricRepresentationContext.CoordinateSpaceDimension >> formatters.unique >> "duraark:IFCSPFFile/duraark:dimensionCount",
 
     file.IfcProject.UnitsInContext.Units.select("IfcSIUnit").Prefix +
         file.IfcProject.UnitsInContext.Units.select("IfcSIUnit").Name >> formatters.mapping(util.qudt.qudt) >>
@@ -96,7 +95,8 @@ ifc_query.rdf_formatter(
 
     file.IfcActor >> formatters.count >> "duraark:IFCSPFFile/duraark:actorCount",
 
-    file.IfcApplication.ApplicationFullName >> "duraark:IFCSPFFile/duraark:authoringTool",
+    # ifcm attribute with name 'ifcApplication'
+    #file.IfcApplication.ApplicationFullName >> "duraark:IFCSPFFile/duraark:authoringTool",
 
     file.measures.optionalAttributesSet >> "duraark:IFCSPFFile/duraark:optionalAttributesSet",
 
@@ -104,5 +104,6 @@ ifc_query.rdf_formatter(
 
     file.measures.entityCount >> "duraark:IFCSPFFile/duraark:entityCount",
 
-    file.rdf_vocabularies >> "duraark:webResourceList"
+    # ifcm attribute
+    #file.rdf_vocabularies >> "duraark:webResourceList"
 ]
