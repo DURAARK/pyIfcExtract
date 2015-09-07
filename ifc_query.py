@@ -391,6 +391,8 @@ class rdf_formatter(object):
             if self.matches_prefix(uri): 
                 p,n = self.matches_prefix(uri); 
                 uri = uri.replace(n,p+':')
+            else:
+                uri = "<%s>" % uri
             return uri
         
         def typify(pred, s):
