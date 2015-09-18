@@ -40,6 +40,30 @@ class query(object):
                 self.prefix, 
                 [i for i in self.instances if i.instance.wrapped_data.is_a(ty)]
             )
+                
+    class grouped_instance_list(object):
+        def __init__(self, prefix=None, instances=None):
+            self.prefix = prefix or ''
+            self.instances = list(map(lambda x: query.instance_list(self.prefix, [x]), instances or []))
+            self.names = list(map(ifcopenshell.guid.expand, map(lambda x: x.GlobalId[0], self.instances)))
+        def __getattr__(self, k):
+            il = query.grouped_instance_list(self.prefix)
+            il.instances = list(map(lambda x: getattr(x, k), self.instances))
+            il.names = self.names
+            if set(map(type, il.instances)) == {list}:
+                attr_type = set([type(b) for a in il.instances for b in a])
+                if attr_type == {query.instance}:
+                    il.instances = list(map(lambda x: query.instance_list(il.prefix, x), il.instances))
+                else:
+                    il.instances = list(map(lambda nm, x: query.parameter_list(list(map(lambda y: (il.prefix, y), x)), [nm]), il.names, il.instances))
+            return il
+        def select(self, ty):
+            il = query.grouped_instance_list(self.prefix)
+            il.instances = list(map(lambda x: x.select(ty), self.instances))
+            il.names = self.names
+            return il
+        def __repr__(self):
+            return "\n".join(map(lambda q: "[\n%s\n]" % repr(q), self.instances))
             
     class instance(object):
         def __init__(self, prefix, instance):
@@ -57,7 +81,7 @@ class query(object):
             return self.wrap_value(getattr(self.instance, k), k)
             
     class parameter_list(object):
-        def __init__(self, li=None):
+        def __init__(self, li=None, data=None):
             vector_names = ['int_vector', 'float_vector', 'double_vector', 'string_vector', 'material_vector']
             vector_types = set(getattr(ifcopenshell.ifcopenshell_wrapper, nm) for nm in vector_names)
             self.li = []
@@ -68,6 +92,7 @@ class query(object):
                             self.li.append((nm, v))
                     else: self.li.append((nm, val))
             walk()
+            self.data = data                
         def __add__(self, other):
             return query.parameter_list(self.li + other.li)
         def __or__(self, other):
@@ -96,6 +121,8 @@ class query(object):
         @staticmethod
         def count(query):
             return query.parameter_list([("%s.Count"%(query.prefix), len(query.entities))])
+        def sum(self):
+            return sum(map(operator.itemgetter(1), self.li))
         def unique(self):
             value_set = set()
             result = query.parameter_list()
@@ -142,7 +169,7 @@ class query(object):
     def __init__(self, instances, prefix=None):
         self.prefix = prefix or ""
         if instances == [[]]: instances = []
-        is_instance_list = isinstance(instances, query.instance_list)
+        is_instance_list = isinstance(instances, (query.instance_list, query.grouped_instance_list))
         if not is_instance_list:
             classes = list(map(type, instances))
             if query.instance in classes or len(instances) == 0:
@@ -173,10 +200,16 @@ class query(object):
         if isinstance(other, str) or (isinstance(other, (tuple, list)) and set(map(type,other)) == {str}): 
             # `other` is a string that describes the new name bound to the parameters in this query object
             q.params = (self.params or query.parameter_list()).bind(other)
+            try: q.params.data = self.params.data
+            except: pass
         elif isinstance(other, query_count):
             # `other` is the formatters.count object, which means we add a new result parameter and initialize it to
             # the amount of instances
             q.params = query.parameter_list.count(self)
+        elif isinstance(other, query_sum):
+            assert isinstance(self.entities, query.grouped_instance_list)
+            data = list(map(lambda li: li.data[0], self.entities.instances))
+            q.params = query.parameter_list(list(map(lambda li: (self.prefix, li.sum()), self.entities.instances)), data)
         elif isinstance(other, query_unique):
             # `other` is the formatters.unique object, which means filter out non-unique parameters
             q.params = (self.params or query.parameter_list()).unique()
@@ -224,6 +257,9 @@ class query(object):
             return "<Unbound query '%s'\n  Entities:\n%s\n>"%(self.prefix, self.entities)
         else:
             return "<Bound query '%s'\n  Parameters:\n%s\n>"%(self.prefix, self.params)
+            
+    def grouped(self):
+        return query(query.grouped_instance_list(self.prefix, self.entities.instances), self.prefix)
             
             
 class file(object):
@@ -289,6 +325,7 @@ def open(fn): return file(ifcopenshell.open(fn))
 
 class query_unique(object): pass
 class query_count(object): pass
+class query_sum(object): pass
 class formatter(object): pass
 class split(object):
     def __init__(self, chr): self.chr = chr
@@ -322,6 +359,7 @@ formatters_list = [
     ("join"        , lambda li: " ".join(li) if li else None                                                ),
     ("unique"      , query_unique()                                                                         ),
     ("count"       , query_count()                                                                          ),
+    ("sum"         , query_sum()                                                                            ),
     ("expand_guid" , ifcopenshell.guid.expand                                                               ),
     ("unit"        , lambda x: x                                                                            ),
     ("regex"       , regex                                                                                  ),
@@ -373,6 +411,8 @@ class rdf_formatter(object):
             return ''.join(map(escape_char, s))
             
         def lookup(pred):
+            if pred.count('/') == 2: return None
+            
             cls, prop = map(lambda s: s.split(':')[1], pred.split('/'))
             def filterByDomainAndPredicate(node):
                 if node.attributes['rdf:about'].value != prop: return False
@@ -407,17 +447,22 @@ class rdf_formatter(object):
         
         def walk():
             for item in li:
-                for p in item.params.li:
+                for d, p in zip(item.params.data or [None] * len(item.params.li), item.params.li):
                     if p[1] is not None:
                         predicates = p[0] if isinstance(p[0], (tuple, list)) else [p[0]]
                         for pred in predicates:
                             val = typify(pred, p[1])
                             if val is not None:
-                                yield pred, val
+                                yield d, pred, val
                             
-        def make_instance(pred):
-            cls, prop = pred.split('/')
-            return "<%s%s_%s>" % (self.ns, cls.lower().split(':')[1], self.uri), cls, prop
+        def make_instance(pred, element_id):
+            if pred.count('/') == 1:
+                cls, prop = pred.split('/')
+                return "<%s%s_%s>" % (self.ns, cls.lower().split(':')[1], self.uri), None, cls, None, prop
+            else:  
+                cls1, cls2, prop = pred.split('/')
+                a, b = "<%s%s_%s>" % (self.ns, cls1.lower().split(':')[1], self.uri), "<%s%s_%s>" % (self.ns, cls2.lower().split(':')[1], element_id)
+                return a, b, cls1, cls2, prop                
 
         for ns in self.prefixes:
             print("@prefix %s: %s ."%ns)
@@ -426,12 +471,20 @@ class rdf_formatter(object):
         
         def emit():
             instances = set()
-            for pred, value in walk():
-                uri, cls, prop = make_instance(pred)
-                if uri not in instances:
-                    instances.add(uri)
-                    yield (uri, "a", cls)
-                yield (uri, prop, value)
+            for element_id, pred, value in walk():
+                uri1, uri2, cls1, cls2, prop = make_instance(pred, element_id)
+                
+                for uri, cls in ((uri1, cls1), (uri2, cls2)):
+                    if uri is None: continue
+                    if uri not in instances:
+                        instances.add(uri)
+                        yield (uri, "a", cls)
+                        
+                if uri2 is None:
+                    yield (uri1, prop, value)
+                else:
+                    yield (uri1, "duraark:hasObject", uri2)
+                    yield (uri2, prop, value)
                 
         statements = sorted(emit())
         ps = None
@@ -480,3 +533,5 @@ class xml_formatter(object):
         
         # tree = ET.ElementTree(nodes_by_path[root_path])
         sys.stdout.write(ET.tostring(nodes_by_path[root_path]))
+
+aggregate = lambda q: q.grouped()

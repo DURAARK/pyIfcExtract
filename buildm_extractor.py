@@ -106,4 +106,9 @@ ifc_query.rdf_formatter(
 
     # ifcm attribute
     #file.rdf_vocabularies >> "duraark:webResourceList"
+    
+    ifc_query.aggregate(file.IfcWallStandardCase).\
+        HasAssociations.select("IfcRelAssociatesMaterial").RelatingMaterial.\
+        select("IfcMaterialLayerSetUsage").ForLayerSet.MaterialLayers.LayerThickness \
+            >> formatters.sum >> "duraark:IFCSPFFile/duraark:Wall/duraark:thickness"
 ]
