@@ -401,7 +401,7 @@ class rdf_formatter(object):
             elif s is None: return None
             elif schema_type is not None: return '"%s"^^%s'%(escape(str(s)), schema_type)
             elif isinstance(s, int): return '"%d"^^xsd:integer'%s
-            elif isinstance(s, float): return '"%r"^^xsd:decimal'%s            
+            elif isinstance(s, float): return '"%s"^^xsd:decimal'%("%.7f"%s).rstrip('0')
             elif self.matches_prefix(s): p,n = self.matches_prefix(s); return s.replace(n,p+':')
             else: return '"%s"^^xsd:string'%escape(str(s))
         
