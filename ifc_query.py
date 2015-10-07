@@ -210,6 +210,10 @@ class query(object):
             assert isinstance(self.entities, query.grouped_instance_list)
             data = list(map(lambda li: li.data[0], self.entities.instances))
             q.params = query.parameter_list(list(map(lambda li: (self.prefix, li.sum()), self.entities.instances)), data)
+        elif isinstance(other, query_avg):
+            li = list(map(operator.itemgetter(1), self.params.li))
+            avg = sum(li) / float(len(li))
+            q.params = query.parameter_list([(self.prefix + ".Average", avg)])
         elif isinstance(other, query_unique):
             # `other` is the formatters.unique object, which means filter out non-unique parameters
             q.params = (self.params or query.parameter_list()).unique()
@@ -234,6 +238,11 @@ class query(object):
             return q
         else:
             return self >> (lambda s: (s or '') + other)
+    def __mul__(self, other):
+        unwrap = lambda a: list(map(lambda l: l[0][1], map(operator.attrgetter('li'), a.entities.instances)))
+        a, b = map(unwrap, (self, other))
+        assert len(a) == len(b)
+        return query(map(operator.mul, a, b), "%s * %s" % (self.prefix, other.prefix))
     def __xor__(self, other):
         q = query([], self.prefix)
         q.params = (self.params or query.parameter_list()) + (other.params or query.parameter_list())
@@ -260,7 +269,7 @@ class query(object):
             
     def grouped(self):
         return query(query.grouped_instance_list(self.prefix, self.entities.instances), self.prefix)
-            
+
             
 class file(object):
     class file_measures(object):
@@ -326,6 +335,7 @@ def open(fn): return file(ifcopenshell.open(fn))
 class query_unique(object): pass
 class query_count(object): pass
 class query_sum(object): pass
+class query_avg(object): pass
 class formatter(object): pass
 class split(object):
     def __init__(self, chr): self.chr = chr
@@ -360,6 +370,7 @@ formatters_list = [
     ("unique"      , query_unique()                                                                         ),
     ("count"       , query_count()                                                                          ),
     ("sum"         , query_sum()                                                                            ),
+    ("avg"         , query_avg()                                                                            ),
     ("expand_guid" , ifcopenshell.guid.expand                                                               ),
     ("unit"        , lambda x: x                                                                            ),
     ("regex"       , regex                                                                                  ),
@@ -535,3 +546,4 @@ class xml_formatter(object):
         sys.stdout.write(ET.tostring(nodes_by_path[root_path]))
 
 aggregate = lambda q: q.grouped()
+flatten = lambda q: q

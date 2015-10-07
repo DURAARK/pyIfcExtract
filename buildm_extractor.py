@@ -107,8 +107,14 @@ ifc_query.rdf_formatter(
     # ifcm attribute
     #file.rdf_vocabularies >> "duraark:webResourceList"
     
-    ifc_query.aggregate(file.IfcWallStandardCase).\
-        HasAssociations.select("IfcRelAssociatesMaterial").RelatingMaterial.\
-        select("IfcMaterialLayerSetUsage").ForLayerSet.MaterialLayers.LayerThickness \
-            >> formatters.sum >> "duraark:IFCSPFFile/duraark:Wall/duraark:thickness"
+    ifc_query.flatten(
+        ifc_query.aggregate(file.IfcWallStandardCase).\
+            HasAssociations.select("IfcRelAssociatesMaterial").RelatingMaterial.\
+            select("IfcMaterialLayerSetUsage").ForLayerSet.MaterialLayers.LayerThickness \
+        >> formatters.sum \
+    ) >> formatters.avg >> "duraark:PhysicalAsset/duraark:averageWallThickness",
+
+    (ifc_query.aggregate(file.IfcWindow).OverallWidth * ifc_query.aggregate(file.IfcWindow).OverallHeight) >> formatters.avg >> "diraark:PhysicalAsset/duraark:totalWindowArea",
+    
+    file.IfcFlowSegment.IsDefinedBy.RelatingPropertyDefinition.select("IfcElementQuantity").Quantities.select("IfcQuantityLength").LengthValue >> "diraark:PhysicalAsset/duraark:totalWireLength"
 ]
