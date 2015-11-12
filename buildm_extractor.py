@@ -21,6 +21,7 @@ ifc_query.rdf_formatter(
     schema_file,
     'http://data.duraark.eu/resource/',
     file.IfcProject.GlobalId >> formatters.expand_guid,
+    [('duraark:IFCSPFFile', 'duraark:represents', 'duraark:PhysicalAsset')],
     {   'xsd'        : '<http://www.w3.org/2001/XMLSchema#>'        ,
         'duraark'    : '<http://data.duraark.eu/vocab/buildm/>'     ,
         'schema'     : '<http://schema.org/>'                       ,

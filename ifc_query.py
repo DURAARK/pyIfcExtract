@@ -3,8 +3,9 @@ import sys
 import json
 import string
 import datetime
+import itertools
 import ifcopenshell
-from collections import namedtuple
+from collections import namedtuple, defaultdict
 import operator
 import inspect
 import functools
@@ -30,7 +31,7 @@ class query(object):
             li = list(map(lambda e: getattr(e, k), self.instances))
             classes = list(map(type, li))
             if query.instance_list in classes:
-                return sum(li, query.instance_list())
+                return sum(filter(lambda v: isinstance(v, query.instance_list), li), query.instance_list())
             return li
         def __repr__(self):
             return ",\n".join("  - %s"%v.instance for v in self.instances)
@@ -155,8 +156,11 @@ class query(object):
             if argc > 1:
                 simplify = lambda x: x.to_rdf() if hasattr(x, 'to_rdf') else x
                 argv = map(simplify, map(operator.itemgetter(1), self.li))
-                k = ",".join(map(operator.itemgetter(0), self.li))
-                return query.parameter_list([(k, fn(*argv))])
+                res = []
+                if argc == len(argv):
+                    k = ",".join(map(operator.itemgetter(0), self.li))
+                    res = [(k, fn(*argv))]
+                return query.parameter_list(res)
             else:
                 return query.parameter_list([(k, fn(v)) for k, v in self.li])
                 
@@ -211,9 +215,11 @@ class query(object):
             data = list(map(lambda li: li.data[0], self.entities.instances))
             q.params = query.parameter_list(list(map(lambda li: (self.prefix, li.sum()), self.entities.instances)), data)
         elif isinstance(other, query_avg):
-            li = list(map(operator.itemgetter(1), self.params.li))
-            avg = sum(li) / float(len(li))
-            q.params = query.parameter_list([(self.prefix + ".Average", avg)])
+            if self.params:
+                li = list(map(operator.itemgetter(1), self.params.li))
+                if len(li):
+                    avg = sum(li) / float(len(li))
+                    q.params = query.parameter_list([(self.prefix + ".Average", avg)])
         elif isinstance(other, query_unique):
             # `other` is the formatters.unique object, which means filter out non-unique parameters
             q.params = (self.params or query.parameter_list()).unique()
@@ -239,10 +245,15 @@ class query(object):
         else:
             return self >> (lambda s: (s or '') + other)
     def __mul__(self, other):
+        res = []
         unwrap = lambda a: list(map(lambda l: l[0][1], map(operator.attrgetter('li'), a.entities.instances)))
         a, b = map(unwrap, (self, other))
-        assert len(a) == len(b)
-        return query(map(operator.mul, a, b), "%s * %s" % (self.prefix, other.prefix))
+        if len(a) == len(b) and len(a) > 0:
+            ab = filter(lambda vs: vs[0] is not None and vs[1] is not None, zip(a, b))
+            if len(ab) > 0:
+                a, b = zip(*ab)
+                res = map(operator.mul, a, b)
+        return query(res, "%s * %s" % (self.prefix, other.prefix))
     def __xor__(self, other):
         q = query([], self.prefix)
         q.params = (self.params or query.parameter_list()) + (other.params or query.parameter_list())
@@ -389,11 +400,12 @@ class JsonFormatter(object):
 json_formatter = JsonFormatter()
 
 class rdf_formatter(object):
-    def __init__(self, schema, ns, name_query, prefixes):
+    def __init__(self, schema, ns, name_query, connection_predicates, prefixes):
         self.schema_dom = parse_xml(schema)
         self.ns = ns
         self.uri = name_query.params.li[0][1]
         self.prefixes = list(prefixes.items())
+        self.connection_predicates = {(a,c): b for a,b,c in connection_predicates}
     def matches_prefix(self, uri):
         for prefix, namespace in self.prefixes:
             if uri.startswith(namespace[1:-1]): return (prefix, namespace[1:-1])
@@ -482,6 +494,9 @@ class rdf_formatter(object):
         
         def emit():
             instances = set()
+            
+            uris = defaultdict(list)
+            
             for element_id, pred, value in walk():
                 uri1, uri2, cls1, cls2, prop = make_instance(pred, element_id)
                 
@@ -490,12 +505,19 @@ class rdf_formatter(object):
                     if uri not in instances:
                         instances.add(uri)
                         yield (uri, "a", cls)
+                        uris[cls].append(uri)
                         
                 if uri2 is None:
                     yield (uri1, prop, value)
                 else:
                     yield (uri1, "duraark:hasObject", uri2)
                     yield (uri2, prop, value)
+                    
+            for a, b in itertools.permutations(uris.keys(), 2):
+                pred = self.connection_predicates.get(tuple((a, b)))
+                if pred is not None:
+                    for c, d in itertools.product(uris[a], uris[b]):
+                        yield (c, pred, d)                        
                 
         statements = sorted(emit())
         ps = None
