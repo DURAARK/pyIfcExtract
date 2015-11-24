@@ -211,9 +211,15 @@ class query(object):
             # the amount of instances
             q.params = query.parameter_list.count(self)
         elif isinstance(other, query_sum):
-            assert isinstance(self.entities, query.grouped_instance_list)
-            data = list(map(lambda li: li.data[0], self.entities.instances))
-            q.params = query.parameter_list(list(map(lambda li: (self.prefix, li.sum()), self.entities.instances)), data)
+            if isinstance(self.entities, query.grouped_instance_list):
+                data = list(map(lambda li: li.data[0], self.entities.instances))
+                q.params = query.parameter_list(list(map(lambda li: (self.prefix, li.sum()), self.entities.instances)), data)
+            elif self.params:
+                li = list(map(operator.itemgetter(1), self.params.li))
+                if len(li):
+                    q.params = query.parameter_list([(self.prefix + ".Sum", sum(li))])
+            else:
+                raise AttributeError()
         elif isinstance(other, query_avg):
             if self.params:
                 li = list(map(operator.itemgetter(1), self.params.li))

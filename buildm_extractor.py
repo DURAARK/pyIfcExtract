@@ -115,7 +115,7 @@ ifc_query.rdf_formatter(
         >> formatters.sum \
     ) >> formatters.avg >> "duraark:PhysicalAsset/duraark:averageWallThickness",
 
-    (ifc_query.aggregate(file.IfcWindow).OverallWidth * ifc_query.aggregate(file.IfcWindow).OverallHeight) >> formatters.avg >> "diraark:PhysicalAsset/duraark:totalWindowArea",
+    (ifc_query.aggregate(file.IfcWindow).OverallWidth * ifc_query.aggregate(file.IfcWindow).OverallHeight) >> formatters.sum >> "diraark:PhysicalAsset/duraark:totalWindowArea",
     
     file.IfcFlowSegment.IsDefinedBy.RelatingPropertyDefinition.select("IfcElementQuantity").Quantities.select("IfcQuantityLength").LengthValue >> "diraark:PhysicalAsset/duraark:totalWireLength"
 ]
