@@ -186,7 +186,10 @@ class query(object):
             self.entities = None
             self.params = query.parameter_list([(self.prefix, v) for v in instances])
     def select(self, ty):
-        return query(self.entities.select(ty), self.prefix)
+        if self.entities is None:
+            return self
+        else:
+            return query(self.entities.select(ty), self.prefix)
     def __getattr__(self, k):
         if self.params: 
             return query([], "%s.%s"%(self.prefix,k))
@@ -219,7 +222,8 @@ class query(object):
                 if len(li):
                     q.params = query.parameter_list([(self.prefix + ".Sum", sum(li))])
             else:
-                raise AttributeError()
+                # raise AttributeError()
+                pass
         elif isinstance(other, query_avg):
             if self.params:
                 li = list(map(operator.itemgetter(1), self.params.li))
@@ -306,7 +310,10 @@ class file(object):
                 
                 self._instanceCount += 1
             self._entityCount = len(entities)
-            self._optionalAttributesSet = float(num_optional_attrs_set) / num_optional_attrs
+            if num_optional_attrs == 0:
+                self._optionalAttributesSet = 0
+            else:
+                self._optionalAttributesSet = float(num_optional_attrs_set) / num_optional_attrs
             
             self._attrs = set(('instanceCount', 'entityCount', 'optionalAttributesSet'))
         def __getattr__(self, k):

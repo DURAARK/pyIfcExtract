@@ -74,7 +74,9 @@ ifc_query.rdf_formatter(
         file.IfcProject.UnitsInContext.Units.select("IfcSIUnit").Name >> formatters.mapping(util.qudt.qudt) >>
         "duraark:IFCSPFFile/duraark:unit",
 
-    file.IfcBuilding.IsDefinedBy.RelatingPropertyDefinition.HasProperties.filter(Name="GrossPlannedArea").NominalValue.wrappedValue >> "duraark:PhysicalAsset/duraark:buildingArea",
+    file.IfcBuilding.IsDefinedBy.select("IfcRelDefinesByProperties").RelatingPropertyDefinition.HasProperties.filter(Name="GrossPlannedArea").NominalValue.wrappedValue >> "duraark:PhysicalAsset/duraark:buildingArea",
+    
+    file.IfcSpace.IsDefinedBy.select("IfcRelDefinesByProperties").RelatingPropertyDefinition.select("IfcElementQuantity").Quantities.select("IfcQuantityArea").AreaValue >> formatters.sum >> "duraark:PhysicalAsset/duraark:buildingArea",
 
     file.IfcBuilding >> formatters.count >> "duraark:PhysicalAsset/duraark:buildingCount",
 
@@ -117,5 +119,5 @@ ifc_query.rdf_formatter(
 
     (ifc_query.aggregate(file.IfcWindow).OverallWidth * ifc_query.aggregate(file.IfcWindow).OverallHeight) >> formatters.sum >> "diraark:PhysicalAsset/duraark:totalWindowArea",
     
-    file.IfcFlowSegment.IsDefinedBy.RelatingPropertyDefinition.select("IfcElementQuantity").Quantities.select("IfcQuantityLength").LengthValue >> "diraark:PhysicalAsset/duraark:totalWireLength"
+    file.IfcFlowSegment.IsDefinedBy.select("IfcRelDefinesByProperties").RelatingPropertyDefinition.select("IfcElementQuantity").Quantities.select("IfcQuantityLength").LengthValue >> "diraark:PhysicalAsset/duraark:totalWireLength"
 ]
